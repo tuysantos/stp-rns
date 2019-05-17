@@ -1,119 +1,176 @@
 import AWS from "aws-sdk";
 import {APIGatewayProxyEvent, Callback, Context} from "aws-lambda";
+
 import {ApiResponse} from "../core/model/ApiResponse";
+import {UuidGenerator} from "../core/uuid/UuidGenerator";
+import {ITransaction, ITransactions} from "../core/model/interfaces";
+import { DataStore } from "../core/Datastore/Datastore-lambda";
 
-import {IDatastore, ITransaction, IResult} from "../core/model/interfaces";
+export class EntitiesApi {
 
-export class services implements IDatastore {
-    //const timestamp = new Date().getTime();
-    private dynamoDb: AWS.DynamoDB.DocumentClient;
     private apiResponse: ApiResponse;
-    private tableName: string =  ""; //process.env.tableName || "serverless-stp-eu-api-dev";
-
+    private uuiD: UuidGenerator;
+    private tableName: string = "";
+    private record: ITransaction;
+    private params: AWS.DynamoDB.DocumentClient.PutItemInput;
+    private updateParams: AWS.DynamoDB.DocumentClient.UpdateItemInput;
+    private lambdaApi: DataStore;
+    private queryParams: AWS.DynamoDB.DocumentClient.QueryInput;
 
     constructor() {
-        this.dynamoDb = new AWS.DynamoDB.DocumentClient();
+        this.uuiD = new UuidGenerator();
         this.apiResponse = new ApiResponse();
+        this.lambdaApi = new DataStore("xxxx");
     }
 
-    public create(record: ITransaction): Promise<IResult> {
-
-        return new Promise((resolve, rejects) => {
-            const params = {
-                TableName: this.tableName,
-                Item: AWS.DynamoDB.Converter.marshall(record)
-              };
-
-            this.dynamoDb.put(params, (err, result) => {
-                if (err) {
-                    console.log("Erros", err);
-                    rejects(this.apiResponse.getApiErrorResponse(err.message, err.code, "*", "application/json"));
-                    return;
-                }
-                console.log("Results", result);
-                resolve(this.apiResponse.getApiStatusResponse(params.Item, "200", "*", "application/json"));
-                return;
-            });
-        });
-    }
-
-    public get(id: string): Promise<IResult> {
-        return new Promise((resolve, rejects) => {
-            const params = {
-                TableName: this.tableName,
-                Key: {
-                  id: id,
-                },
-              };
-
-            this.dynamoDb.get(params, (err, result) => {
-                if (err) {
-                    console.log("Erros", err);
-                    rejects(this.apiResponse.getApiErrorResponse(err.message, err.code, "*", "application/json"));
-                    return;
-                }
-                console.log("Result", result);
-                resolve(this.apiResponse.getApiStatusResponse(result.Item, "200", "*", "application/json"));
-                return;
-            });
-        });
-    }
-
-    public update(record: ITransaction): Promise<IResult> {
-        return new Promise((resolve, rejects) => {
-            const params = {
-                TableName: this.tableName,
-                Key: {
-                  id: record.id,
-                },
-                ExpressionAttributeValues: {
-                  ':userId': record.userId,
-                  ':transactionDate': record.transactionDate,
-                  ':transactionValue': record.transactionValue,
-                  ':serviceId': record.serviceId,
-                  ':transactionStatus': record.transactionStatus
-                },
-                UpdateExpression: 'SET userId = :userId, transactionDate = :transactionDate, transactionValue :transactionValue, serviceId :serviceId, transactionStatus :transactionStatus',
-                ReturnValues: 'ALL_NEW',
-              };
-
-            this.dynamoDb.update(params, (err, result) => {
-                if (err) {
-                    console.log("Erros", err);
-                    rejects(this.apiResponse.getApiErrorResponse(err.message, err.code, "*", "application/json"));
-                    return;
-                }
-                console.log("Result", result);
-                resolve(this.apiResponse.getApiStatusResponse(result.Attributes, "200", "*", "application/json"));
-                return;
-            });
-        });
-    }
-
-    public list(): Promise<IResult> {
-        return new Promise((resolve, rejects) => {
-            const params = {
-                TableName: this.tableName,
-              };
-
-            this.dynamoDb.scan(params, (err, result) => {
-                if (err) {
-                    console.log("Erros", err);
-                    rejects(this.apiResponse.getApiErrorResponse(err.message, err.code, "*", "application/json"));
-                    return;
-                }
-                console.log("Result", result);
-                resolve(this.apiResponse.getApiStatusResponse(result.Items, "200", "*", "application/json"));
-                return;
-            });
-        });
-    }
-
-    private buildResults(source: any[]): any[] {
-        let unMarshallData = [];
-        for(let i = 0; i < source.length; i++) {
-            unMarshallData[unMarshallData.length] = AWS.DynamoDB.Converter.unmarshall(source[i]);
+    public onHttpPost(event: APIGatewayProxyEvent, context: Context, callback: Callback) : void {
+        //Check the http request method 
+        if (event.httpMethod !== "POST" && event.httpMethod !== "PUT") {
+            callback(undefined, this.apiResponse.getApiErrorResponse(`${event.httpMethod} is an invalid http request method`, "400", "*", "application/json"));
+            return;
         }
-        return unMarshallData;
+
+        //check if any parameter was passed
+        if (!event.body || event.body.length === 0) {
+            callback(undefined, this.apiResponse.getApiErrorResponse("parameter {id} not specified", "400", "*", "application/json"));
+            return;
+        }
+
+        const data = JSON.parse(event.body);
+        this.record = { id: this.uuiD.generateUUID(), userId: data.userId, transactionDate: data.transactionDate, transactionValue : data.transactionValue, serviceId: data.serviceId, transactionStatus : data.transactionStatus };
+        this.params = { TableName: this.tableName, Item: AWS.DynamoDB.Converter.marshall(this.record) };
+
+        this.lambdaApi.create(this.record, this.params)
+            .then(response => {
+                callback(undefined, response);
+            })
+            .catch(err => {
+                callback(undefined, err);
+            });
     }
+
+    public onHttpGet(event: APIGatewayProxyEvent, context: Context, callback: Callback): void {
+        //Check the http request method 
+        if (event.httpMethod !== "GET") {
+            callback(undefined, this.apiResponse.getApiErrorResponse(`${event.httpMethod} is an invalid http request method`, "400", "*", "application/json"));
+            return;
+        }
+
+        //check if any parameter was passed
+        if (!event.pathParameters || !event.pathParameters.id) {
+            callback(undefined, this.apiResponse.getApiErrorResponse("parameter {id} not specified", "400", "*", "application/json"));
+            return;
+        }
+
+        this.lambdaApi.get(event.pathParameters.id)
+            .then(response => {
+                callback(undefined, response);
+            })
+            .catch(err => {
+                callback(undefined, err);
+            });
+    }
+
+    public onHttpPut(event: APIGatewayProxyEvent, context: Context, callback: Callback): void {
+        //Check the http request method 
+        if (event.httpMethod !== "PUT") {
+            callback(undefined, this.apiResponse.getApiErrorResponse(`${event.httpMethod} is an invalid http request method`, "400", "*", "application/json"));
+            return;
+        }
+
+        //check if any parameter was passed
+        if (!event.pathParameters || !event.pathParameters.id) {
+            callback(undefined, this.apiResponse.getApiErrorResponse("parameter {id} not specified", "400", "*", "application/json"));
+            return;
+        }
+
+        //check if any parameter was passed
+        if (!event.body || event.body.length === 0) {
+            callback(undefined, this.apiResponse.getApiErrorResponse("body not specified", "400", "*", "application/json"));
+            return;
+        }
+
+        const data = JSON.parse(event.body);
+        this.record = { id: event.pathParameters.id, userId: data.userId, transactionDate: data.transactionDate, transactionValue : data.transactionValue, serviceId: data.serviceId, transactionStatus : data.transactionStatus };
+
+        this.updateParams = {
+            TableName: this.tableName,
+            Key: {
+              id: this.record.id,
+            },
+            ExpressionAttributeValues: {
+              ':userId': this.record.userId,
+              ':transactionDate': this.record.transactionDate,
+              ':transactionValue': this.record.transactionValue,
+              ':serviceId': this.record.serviceId,
+              ':transactionStatus': this.record.transactionStatus
+            },
+            UpdateExpression: 'SET userId = :userId, transactionDate = :transactionDate, transactionValue :transactionValue, serviceId :serviceId, transactionStatus :transactionStatus',
+            ReturnValues: 'ALL_NEW',
+          };
+
+        this.lambdaApi.update(this.record, this.updateParams)
+            .then(response => {
+                callback(undefined, response);
+            })
+            .catch(err => {
+                callback(undefined, err);
+            });
+    }
+
+    public onHttpList(event: APIGatewayProxyEvent, context: Context, callback: Callback): void {
+        //Check the http request method 
+        if (event.httpMethod !== "GET") {
+            callback(undefined, this.apiResponse.getApiErrorResponse(`${event.httpMethod} is an invalid http request method`, "400", "*", "application/json"));
+            return;
+        }
+
+        this.lambdaApi.list()
+            .then(response => {
+                callback(undefined, response);
+            })
+            .catch(err => {
+                callback(undefined, err);
+            });
+    }
+
+    public onHttpGetTransactionsById(event: APIGatewayProxyEvent, context: Context, callback: Callback): void {
+        //Check the http request method 
+        if (event.httpMethod !== "GET") {
+            callback(undefined, this.apiResponse.getApiErrorResponse(`${event.httpMethod} is an invalid http request method`, "400", "*", "application/json"));
+            return;
+        }
+
+        //check if any parameter was passed
+        if (!event.pathParameters || !event.pathParameters.id) {
+            callback(undefined, this.apiResponse.getApiErrorResponse("parameter {id} not specified", "400", "*", "application/json"));
+            return;
+        }
+
+        this.queryParams = {
+            TableName: this.tableName,
+            KeyConditionExpression: "#id = :email",
+            ExpressionAttributeNames:{
+                "#id": "id"
+                },
+            ExpressionAttributeValues: {
+                ":id": event.pathParameters.id
+                }
+          };
+
+        this.lambdaApi.listById(this.queryParams)
+            .then(response => {
+                let transactions: ITransaction[] = JSON.parse(response.body);
+                let data: ITransactions = {
+                    userId: event.pathParameters.id,
+                    transactions: transactions
+                }
+                response.body = JSON.stringify(data);
+                callback(undefined, response);
+            })
+            .catch(err => {
+                callback(undefined, err);
+            });
+    }
+
 }

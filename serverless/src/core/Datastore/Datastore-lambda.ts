@@ -10,7 +10,6 @@ export class DataStore implements IDatastore {
     private apiResponse: ApiResponse;
     private tableName: string;
 
-
     constructor(table: string) {
         this.dynamoDb = new AWS.DynamoDB.DocumentClient();
         this.apiResponse = new ApiResponse();
@@ -20,11 +19,6 @@ export class DataStore implements IDatastore {
     public create(record: IEntity | IService | IUser | ITransaction | ITransactionStatus, params: AWS.DynamoDB.DocumentClient.PutItemInput): Promise<IResult> {
 
         return new Promise((resolve, rejects) => {
-            // const params = {
-            //     TableName: this.tableName,
-            //     Item: AWS.DynamoDB.Converter.marshall(record)
-            //   };
-
             this.dynamoDb.put(params, (err, result) => {
                 if (err) {
                     console.log("Erros", err);
@@ -54,7 +48,7 @@ export class DataStore implements IDatastore {
                     return;
                 }
                 console.log("Result", result);
-                resolve(this.apiResponse.getApiStatusResponse(result.Item, "200", "*", "application/json"));
+                resolve(this.apiResponse.getApiStatusResponse(AWS.DynamoDB.Converter.unmarshall(result.Item), "200", "*", "application/json"));
                 return;
             });
         });
@@ -62,18 +56,6 @@ export class DataStore implements IDatastore {
 
     public update(record: IEntity | IService | IUser | ITransaction | ITransactionStatus, params: AWS.DynamoDB.DocumentClient.UpdateItemInput): Promise<IResult> {
         return new Promise((resolve, rejects) => {
-            // const params = {
-            //     TableName: this.tableName,
-            //     Key: {
-            //       id: record.id,
-            //     },
-            //     ExpressionAttributeValues: {
-            //       ':status': record.status
-            //     },
-            //     UpdateExpression: 'SET status = :status',
-            //     ReturnValues: 'ALL_NEW',
-            //   };
-
             this.dynamoDb.update(params, (err, result) => {
                 if (err) {
                     console.log("Erros", err);
@@ -81,7 +63,7 @@ export class DataStore implements IDatastore {
                     return;
                 }
                 console.log("Result", result);
-                resolve(this.apiResponse.getApiStatusResponse(result.Attributes, "200", "*", "application/json"));
+                resolve(this.apiResponse.getApiStatusResponse(AWS.DynamoDB.Converter.unmarshall(result.Attributes), "200", "*", "application/json"));
                 return;
             });
         });
@@ -100,7 +82,22 @@ export class DataStore implements IDatastore {
                     return;
                 }
                 console.log("Result", result);
-                resolve(this.apiResponse.getApiStatusResponse(result.Items, "200", "*", "application/json"));
+                resolve(this.apiResponse.getApiStatusResponse(this.buildResults(result.Items), "200", "*", "application/json"));
+                return;
+            });
+        });
+    }
+
+    public listById(params: AWS.DynamoDB.DocumentClient.QueryInput): Promise<IResult> {
+        return new Promise((resolve, rejects) => {
+            this.dynamoDb.query(params, (err, result) => {
+                if (err) {
+                    console.log("Erros", err);
+                    rejects(this.apiResponse.getApiErrorResponse(err.message, err.code, "*", "application/json"));
+                    return;
+                }
+                console.log("Result", result);
+                resolve(this.apiResponse.getApiStatusResponse(this.buildResults(result.Items), "200", "*", "application/json"));
                 return;
             });
         });

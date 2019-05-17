@@ -51,5 +51,13 @@ export interface IDatastore {
     create(record: IEntity | IService | IUser | ITransaction | ITransactionStatus, params: AWS.DynamoDB.DocumentClient.PutItemInput): Promise<IResult>,
     get(id: string): Promise<IResult>,
     update(record: IEntity | IService | IUser | ITransaction | ITransactionStatus, params: AWS.DynamoDB.DocumentClient.UpdateItemInput): Promise<IResult>,
-    list(): Promise<IResult>
+    list(): Promise<IResult>,
+    listById(params: AWS.DynamoDB.DocumentClient.QueryInput): Promise<IResult>
+
 }
+
+export interface ITransactions {
+    userId: string,
+    transactions: ITransaction[]
+}
+

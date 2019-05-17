@@ -13,6 +13,7 @@ export class EntitiesApi {
     private tableName: string = "";
     private record: IEntity;
     private params: AWS.DynamoDB.DocumentClient.PutItemInput;
+    private updateParams: AWS.DynamoDB.DocumentClient.UpdateItemInput;
     private lambdaApi: DataStore;
 
     constructor() {
@@ -39,6 +40,86 @@ export class EntitiesApi {
         this.params = { TableName: this.tableName, Item: AWS.DynamoDB.Converter.marshall(this.record) };
 
         this.lambdaApi.create(this.record, this.params)
+            .then(response => {
+                callback(undefined, response);
+            })
+            .catch(err => {
+                callback(undefined, err);
+            });
+    }
+
+    public onHttpGet(event: APIGatewayProxyEvent, context: Context, callback: Callback): void {
+        //Check the http request method 
+        if (event.httpMethod !== "GET") {
+            callback(undefined, this.apiResponse.getApiErrorResponse(`${event.httpMethod} is an invalid http request method`, "400", "*", "application/json"));
+            return;
+        }
+
+        //check if any parameter was passed
+        if (!event.pathParameters || !event.pathParameters.id) {
+            callback(undefined, this.apiResponse.getApiErrorResponse("parameter {id} not specified", "400", "*", "application/json"));
+            return;
+        }
+
+        this.lambdaApi.get(event.pathParameters.id)
+            .then(response => {
+                callback(undefined, response);
+            })
+            .catch(err => {
+                callback(undefined, err);
+            });
+    }
+
+    public onHttpPut(event: APIGatewayProxyEvent, context: Context, callback: Callback): void {
+        //Check the http request method 
+        if (event.httpMethod !== "PUT") {
+            callback(undefined, this.apiResponse.getApiErrorResponse(`${event.httpMethod} is an invalid http request method`, "400", "*", "application/json"));
+            return;
+        }
+
+        //check if any parameter was passed
+        if (!event.pathParameters || !event.pathParameters.id) {
+            callback(undefined, this.apiResponse.getApiErrorResponse("parameter {id} not specified", "400", "*", "application/json"));
+            return;
+        }
+
+        //check if any parameter was passed
+        if (!event.body || event.body.length === 0) {
+            callback(undefined, this.apiResponse.getApiErrorResponse("body not specified", "400", "*", "application/json"));
+            return;
+        }
+
+        const data = JSON.parse(event.body);
+        this.record = { id: event.pathParameters.id, entityName: data.entityName };
+        this.updateParams = {
+            TableName: this.tableName,
+            Key: {
+              id: this.record.id,
+            },
+            ExpressionAttributeValues: {
+              ':entityName': this.record.entityName
+            },
+            UpdateExpression: 'SET entityName = :entityName',
+            ReturnValues: 'ALL_NEW',
+          };
+
+        this.lambdaApi.update(this.record, this.updateParams)
+            .then(response => {
+                callback(undefined, response);
+            })
+            .catch(err => {
+                callback(undefined, err);
+            });
+    }
+
+    public onHttpList(event: APIGatewayProxyEvent, context: Context, callback: Callback): void {
+        //Check the http request method 
+        if (event.httpMethod !== "GET") {
+            callback(undefined, this.apiResponse.getApiErrorResponse(`${event.httpMethod} is an invalid http request method`, "400", "*", "application/json"));
+            return;
+        }
+
+        this.lambdaApi.list()
             .then(response => {
                 callback(undefined, response);
             })
