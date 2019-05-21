@@ -18,7 +18,7 @@ provider:
 
 functions:
   entityCreate:
-    handler: ../src/entity/entity-lambda.onHttpPost
+    handler: src/entity/entity-lambda.onHttpPost
     name: ${self:service}-${self:custom.stage}-entity-create
     tags:
       Description: Add new entity
@@ -30,7 +30,7 @@ functions:
           cors: true
 
   entityGet:
-    handler: ../src/entity/entity-lambda.onHttpGet
+    handler: src/entity/entity-lambda.onHttpGet
     name: ${self:service}-${self:custom.stage}-entity-get
     tags:
       Description: get an entity
@@ -42,7 +42,7 @@ functions:
           cors: true
 
   entityUpdate:
-    handler: ../src/entity/entity-lambda.onHttpPut
+    handler: src/entity/entity-lambda.onHttpPut
     name: ${self:service}-${self:custom.stage}-entity-put
     tags:
       Description: update an entity
@@ -54,7 +54,7 @@ functions:
           cors: true
 
   entityList:
-    handler: ../src/entity/entity-lambda.onHttpList
+    handler: src/entity/entity-lambda.onHttpList
     name: ${self:service}-${self:custom.stage}-entity-list
     tags:
       Description: Add new entity
@@ -66,7 +66,7 @@ functions:
           cors: true
 
 resources:
-  - ${file(dynamodb.yml)}
+  - ${file(resources/entity/dynamodb.yml)}
 
 plugins:
   - serverless-plugin-typescript
@@ -77,10 +77,10 @@ plugins:
 
 package:
   include:
-    - ../src/core/*
-    - ../src/core/**/*
-    - ../src/entity/*
-    - ../src/entity/**/*
+    - src/core/*
+    - src/core/**/*
+    - src/entity/*
+    - src/entity/**/*
 
 custom:
   stage: ${opt:stage, self:provider.stage}

@@ -1,4 +1,4 @@
-import AWS from "aws-sdk";
+import {DynamoDB} from "aws-sdk";
 import {APIGatewayProxyEvent, Callback, Context} from "aws-lambda";
 
 import {ApiResponse} from "../core/model/ApiResponse";
@@ -6,20 +6,21 @@ import {UuidGenerator} from "../core/uuid/UuidGenerator";
 import {ITransactionStatus} from "../core/model/interfaces";
 import { DataStore } from "../core/Datastore/Datastore-lambda";
 
-export class EntitiesApi {
+export class TransactionsStatusApi {
 
     private apiResponse: ApiResponse;
     private uuiD: UuidGenerator;
-    private tableName: string = "";
+    private tableName: string = "sls-stp-rns-dev-transactionStatus";
     private record: ITransactionStatus;
-    private params: AWS.DynamoDB.DocumentClient.PutItemInput;
-    private updateParams: AWS.DynamoDB.DocumentClient.UpdateItemInput;
+    private params: DynamoDB.DocumentClient.PutItemInput;
+    private updateParams: DynamoDB.DocumentClient.UpdateItemInput;
     private lambdaApi: DataStore;
+    private dynamoDb: DynamoDB;
 
     constructor() {
         this.uuiD = new UuidGenerator();
         this.apiResponse = new ApiResponse();
-        this.lambdaApi = new DataStore("xxxx");
+        this.lambdaApi = new DataStore(this.tableName, this.dynamoDb);
     }
 
     public onHttpPost(event: APIGatewayProxyEvent, context: Context, callback: Callback) : void {
@@ -37,7 +38,7 @@ export class EntitiesApi {
 
         const data = JSON.parse(event.body);
         this.record = { id: this.uuiD.generateUUID(), status: data.status };
-        this.params = { TableName: this.tableName, Item: AWS.DynamoDB.Converter.marshall(this.record) };
+        this.params = { TableName: this.tableName, Item: DynamoDB.Converter.marshall(this.record) };
 
         this.lambdaApi.create(this.record, this.params)
             .then(response => {
