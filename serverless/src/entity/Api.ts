@@ -3,15 +3,15 @@ import {APIGatewayProxyEvent, Callback, Context} from "aws-lambda";
 
 import {ApiResponse} from "../core/model/ApiResponse";
 import {UuidGenerator} from "../core/uuid/UuidGenerator";
-import {IService} from "../core/model/interfaces";
+import {IEntity} from "../core/model/interfaces";
 import { DataStore } from "../core/Datastore/Datastore-lambda";
 
-export class ServicesApi {
+export class EntitiesApi {
 
     private apiResponse: ApiResponse;
     private uuiD: UuidGenerator;
-    private tableName: string = "sls-stp-rns-dev-service";
-    private record: IService;
+    private tableName: string = "sls-stp-rns-dev-entity";
+    private record: IEntity;
     private params: DynamoDB.DocumentClient.PutItemInput;
     private updateParams: DynamoDB.DocumentClient.UpdateItemInput;
     private lambdaApi: DataStore;
@@ -37,7 +37,7 @@ export class ServicesApi {
         }
 
         const data = JSON.parse(event.body);
-        this.record = { id: this.uuiD.generateUUID(), entityId: data.entityId, serviceName: data.serviceName, price : data.price };
+        this.record = { id: this.uuiD.generateUUID(), entityName: data.entityName };
         this.params = { TableName: this.tableName, Item: DynamoDB.Converter.marshall(this.record) };
 
         this.lambdaApi.create(this.record, this.params)
@@ -91,19 +91,16 @@ export class ServicesApi {
         }
 
         const data = JSON.parse(event.body);
-        this.record = { id: event.pathParameters.id, entityId: data.entityId, serviceName: data.serviceName, price : data.price };
-
+        this.record = { id: event.pathParameters.id, entityName: data.entityName };
         this.updateParams = {
             TableName: this.tableName,
             Key: {
               id: this.record.id,
             },
             ExpressionAttributeValues: {
-              ':entityId': this.record.entityId,
-              ':serviceName': this.record.serviceName,
-              ':price': this.record.price
+              ':entityName': this.record.entityName
             },
-            UpdateExpression: 'SET entityId = :entityId, serviceName = :serviceName, price :price',
+            UpdateExpression: 'SET entityName = :entityName',
             ReturnValues: 'ALL_NEW',
           };
 
@@ -133,4 +130,5 @@ export class ServicesApi {
     }
 
 }
+
 

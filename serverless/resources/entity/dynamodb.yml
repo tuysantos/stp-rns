@@ -1,0 +1,30 @@
+Resources:
+
+  EntityTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:custom.tableName}
+
+      ProvisionedThroughput:
+        ReadCapacityUnits: ${self:custom.tableThroughput}
+        WriteCapacityUnits: ${self:custom.tableThroughput}
+
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+        - AttributeName: "entityName"
+          AttributeType: "S"
+
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+        - AttributeName: "entityName"
+          KeyType: "RANGE"
+
+Outputs:
+  EntityTableArn:
+    Description: The ARN for the core table
+    Value:
+      "Fn::GetAtt": [ EntityTable, Arn ]
+    Export:
+      Name: ${self:service}:${self:custom.stage}:EntityTableArn
